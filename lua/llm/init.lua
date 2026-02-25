@@ -183,7 +183,7 @@ M._cb_progress_print = function()
     local msg = "In progress" .. string.rep(".", state.n_dots_progress)
     vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, { msg })
 
-    vim.fn.timer_start(1000, M._cb_progress_print)
+    state.progress_timer = vim.fn.timer_start(1000, M._cb_progress_print)
 end
 
 --- Callback executed when the LLM job completes
@@ -288,7 +288,7 @@ M.llm = function(cmd_opts)
         state.job_id = vim.system({ "sh", "-c", cmd_to_exec }, job_opts, cb_on_exit)
 
         state.awaiting_response = true
-        vim.fn.timer_start(0, M._cb_progress_print)
+        state.progress_timer = vim.fn.timer_start(0, M._cb_progress_print)
     end
 end
 
