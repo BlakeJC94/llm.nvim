@@ -42,7 +42,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
                 position = "bottom",
             },
         },
-        commands = {
+        cmd = {
             "LLM",
             "LLMToggle",
             "LLMOpen",
