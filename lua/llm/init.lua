@@ -168,14 +168,19 @@ M.toggle = function()
     end
 end
 
+local stop_progress_print = function()
+    vim.fn.timer_stop(state.progress_timer)
+    state.progress_timer = nil
+end
+
+
 --- Progress indicator callback
 --- Displays an animated "In progress..." message with cycling dots
 --- Recursively schedules itself every 1 second while awaiting response
 --- Internal function, not intended for direct use
 M._cb_progress_print = function()
     if not state.awaiting_response then
-        vim.fn.timer_stop(state.progress_timer)
-        state.progress_timer = nil
+        stop_progress_print()
         return
     end
 
@@ -263,7 +268,7 @@ M.llm = function(cmd_opts)
     if bang then
         -- synchronous exec, write output to cursor
         print("In progress...")
-        local obj = vim.system({ "sh", "-c", cmd_to_exec }, job_opts):wait()
+        local obj = vim.system({ "sh", "-c", "exec " .. cmd_to_exec }, job_opts):wait()
 
         if obj.code ~= nil and obj.code > 0 then
             vim.notify("llm failed: " .. obj.stderr, vim.log.levels.ERROR)
@@ -287,7 +292,7 @@ M.llm = function(cmd_opts)
             M.open()
         end
 
-        state.job_id = vim.system({ "sh", "-c", cmd_to_exec }, job_opts, cb_on_exit)
+        state.job_id = vim.system({ "sh", "-c", "exec " .. cmd_to_exec }, job_opts, cb_on_exit)
 
         state.awaiting_response = true
         state.progress_timer = vim.fn.timer_start(0, M._cb_progress_print)
@@ -298,7 +303,9 @@ end
 --- Terminates the running process if one exists
 M.stop = function()
     if state.job_id ~= nil then
-        state.job_id:kill()
+        stop_progress_print()
+        state.awaiting_response = false
+        state.job_id:kill(2)
     end
 end
 
