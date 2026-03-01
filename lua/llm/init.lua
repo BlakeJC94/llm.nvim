@@ -112,6 +112,7 @@ local function init_buffer()
             vim.bo[state.buf][opt] = val
         end
 
+        vim.keymap.set("n", "<C-c><C-c>", M.stop, { buffer = state.buf })
         vim.api.nvim_buf_set_name(state.buf, "LLM")
 
         vim.api.nvim_create_autocmd("BufDelete", {
@@ -202,7 +203,8 @@ local cb_on_exit = function(obj)
 
     if obj.code > 0 then
         vim.schedule(function()
-            vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, { "Aborted" })
+            local err_lines = vim.split(obj.stderr ~= "" and obj.stderr or "Aborted", "\n")
+            vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, err_lines)
         end)
         return
     end
