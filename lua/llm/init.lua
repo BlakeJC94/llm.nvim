@@ -235,7 +235,7 @@ M.llm = function(cmd_opts)
         end)
     end
 
-    local cmd_to_exec = "llm" .. " " .. args
+    local cmd_to_exec = "stdbuf -oL -eL llm" .. " " .. args
 
     -- Check if we are in visual mode and get the selection range
     local text = nil
