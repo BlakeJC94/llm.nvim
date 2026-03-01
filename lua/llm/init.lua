@@ -201,7 +201,7 @@ local cb_on_exit = function(obj)
         return
     end
 
-    if obj.code > 0 then
+    if obj.code > 0 or obj.signal > 0 then
         vim.schedule(function()
             local err_lines = vim.split(obj.stderr ~= "" and obj.stderr or "Aborted", "\n")
             vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, err_lines)
