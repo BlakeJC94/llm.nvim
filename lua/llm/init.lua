@@ -128,7 +128,7 @@ local function init_buffer()
             end,
         })
     else
-        vim.api.nvim_buf_set_lines(state.buf, 0, -1, true, {""})
+        vim.api.nvim_buf_set_lines(state.buf, 0, -1, true, { "" })
     end
 end
 
@@ -173,10 +173,9 @@ end
 
 local stop_progress_print = function()
     vim.fn.timer_stop(state.progress_timer)
-    vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, {""})
+    vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, { "" })
     state.progress_timer = nil
 end
-
 
 --- Progress indicator callback
 --- Displays an animated "In progress..." message with cycling dots
@@ -225,6 +224,42 @@ local cb_on_exit = function(obj)
             local last_line = vim.api.nvim_buf_get_lines(state.buf, -2, -1, false)[1] or ""
             vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, { last_line .. state.partial })
             state.partial = ""
+        end
+    end)
+end
+
+local cb_on_stdout = function(err, data)
+    if data == nil then
+        return
+    end
+
+    if state.progress_timer ~= nil then
+        vim.schedule(stop_progress_print)
+    end
+
+    vim.schedule(function()
+        local chunk = state.partial .. data
+        local lines = vim.split(chunk, "\n", { plain = true })
+        -- everything except the last element is a complete line
+        state.partial = table.remove(lines) or ""
+        if #lines == 0 then
+            return
+        end
+        -- join first element onto the current last buffer line (mid-line continuation)
+        local last_line = vim.api.nvim_buf_get_lines(state.buf, -2, -1, false)[1] or ""
+        local buf_is_pristine = last_line == "" and vim.api.nvim_buf_line_count(state.buf) == 1
+        if last_line ~= "" or buf_is_pristine then
+            lines[1] = last_line .. lines[1]
+            vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, lines)
+        else
+            vim.api.nvim_buf_set_lines(state.buf, -1, -1, true, lines)
+        end
+        -- scroll to the last line in all windows displaying this buffer
+        if CONFIG.autoscroll then
+            local last = vim.api.nvim_buf_line_count(state.buf)
+            for _, win in ipairs(vim.fn.win_findbuf(state.buf)) do
+                vim.api.nvim_win_set_cursor(win, { last, 0 })
+            end
         end
     end)
 end
@@ -302,41 +337,7 @@ M.llm = function(cmd_opts)
             M.open()
         end
 
-        job_opts.stdout = function(err, data)
-            if data == nil then
-                return
-            end
-
-            if state.progress_timer ~= nil then
-                vim.schedule(stop_progress_print)
-            end
-
-            vim.schedule(function()
-                local chunk = state.partial .. data
-                local lines = vim.split(chunk, "\n", { plain = true })
-                -- everything except the last element is a complete line
-                state.partial = table.remove(lines) or ""
-                if #lines == 0 then
-                    return
-                end
-                -- join first element onto the current last buffer line (mid-line continuation)
-                local last_line = vim.api.nvim_buf_get_lines(state.buf, -2, -1, false)[1] or ""
-                local buf_is_pristine = last_line == "" and vim.api.nvim_buf_line_count(state.buf) == 1
-                if last_line ~= "" or buf_is_pristine then
-                    lines[1] = last_line .. lines[1]
-                    vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, lines)
-                else
-                    vim.api.nvim_buf_set_lines(state.buf, -1, -1, true, lines)
-                end
-                -- scroll to the last line in all windows displaying this buffer
-                if CONFIG.autoscroll then
-                    local last = vim.api.nvim_buf_line_count(state.buf)
-                    for _, win in ipairs(vim.fn.win_findbuf(state.buf)) do
-                        vim.api.nvim_win_set_cursor(win, { last, 0 })
-                    end
-                end
-            end)
-        end
+        job_opts.stdout = cb_on_stdout
 
         state.partial = ""
         state.job_id = vim.system({ "sh", "-c", cmd_to_exec }, job_opts, cb_on_exit)
