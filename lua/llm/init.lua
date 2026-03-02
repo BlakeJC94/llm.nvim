@@ -17,6 +17,7 @@ local state = {
     progress_timer = nil,
     awaiting_response = false,
     n_dots_progress = 0,
+    partial = "",
 }
 
 --- Default plugin configuration
@@ -170,6 +171,7 @@ end
 
 local stop_progress_print = function()
     vim.fn.timer_stop(state.progress_timer)
+    vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, {})
     state.progress_timer = nil
 end
 
@@ -211,12 +213,18 @@ local cb_on_exit = function(obj)
             local err_lines = vim.split(obj.stderr ~= "" and obj.stderr or "Aborted", "\n")
             vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, err_lines)
         end)
+        state.partial = ""
         return
     end
 
-    -- vim.schedule(function()
-    --     vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, vim.split(obj.stdout, "\n"))
-    -- end)
+    -- flush any remaining partial data
+    vim.schedule(function()
+        if state.partial ~= "" then
+            local last_line = vim.api.nvim_buf_get_lines(state.buf, -2, -1, false)[1] or ""
+            vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, { last_line .. state.partial })
+            state.partial = ""
+        end
+    end)
 end
 
 --- Execute an LLM command
@@ -242,8 +250,9 @@ M.llm = function(cmd_opts)
         end)
     end
 
+    local cmd_to_exec = "llm" .. " " .. args
     -- local cmd_to_exec = "stdbuf -oL -eL llm" .. " " .. args
-    local cmd_to_exec = "i=1; while [ $i -le 5 ]; do sleep 1; echo $i; i=$((i+1)); done"
+    -- local cmd_to_exec = "i=1; while [ $i -le 5 ]; do sleep 1; echo $i; i=$((i+1)); done"
 
     -- Check if we are in visual mode and get the selection range
     local text = nil
@@ -303,10 +312,21 @@ M.llm = function(cmd_opts)
             end
 
             vim.schedule(function()
-                vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, vim.split(data, "\n"))
+                local chunk = state.partial .. data
+                local lines = vim.split(chunk, "\n", { plain = true })
+                -- everything except the last element is a complete line
+                state.partial = table.remove(lines) or ""
+                if #lines == 0 then
+                    return
+                end
+                -- append complete lines: first one joins onto the current last buffer line
+                local last_line = vim.api.nvim_buf_get_lines(state.buf, -2, -1, false)[1] or ""
+                lines[1] = last_line .. lines[1]
+                vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, lines)
             end)
         end
 
+        state.partial = ""
         state.job_id = vim.system({ "sh", "-c", cmd_to_exec }, job_opts, cb_on_exit)
 
         state.awaiting_response = true
