@@ -320,10 +320,19 @@ M.llm = function(cmd_opts)
                 if #lines == 0 then
                     return
                 end
-                -- append complete lines: first one joins onto the current last buffer line
+                -- join first element onto the current last buffer line (mid-line continuation)
                 local last_line = vim.api.nvim_buf_get_lines(state.buf, -2, -1, false)[1] or ""
-                lines[1] = last_line .. lines[1]
-                vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, lines)
+                if last_line ~= "" then
+                    lines[1] = last_line .. lines[1]
+                    vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, lines)
+                else
+                    vim.api.nvim_buf_set_lines(state.buf, -1, -1, true, lines)
+                end
+                -- scroll to the last line in all windows displaying this buffer
+                local last = vim.api.nvim_buf_line_count(state.buf)
+                for _, win in ipairs(vim.fn.win_findbuf(state.buf)) do
+                    vim.api.nvim_win_set_cursor(win, { last, 0 })
+                end
             end)
         end
 
