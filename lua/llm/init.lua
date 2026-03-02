@@ -127,7 +127,7 @@ local function init_buffer()
             end,
         })
     else
-        vim.api.nvim_buf_set_lines(state.buf, 0, -1, true, {})
+        vim.api.nvim_buf_set_lines(state.buf, 0, -1, true, {""})
     end
 end
 
@@ -172,7 +172,7 @@ end
 
 local stop_progress_print = function()
     vim.fn.timer_stop(state.progress_timer)
-    vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, {})
+    vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, {""})
     state.progress_timer = nil
 end
 
@@ -322,7 +322,8 @@ M.llm = function(cmd_opts)
                 end
                 -- join first element onto the current last buffer line (mid-line continuation)
                 local last_line = vim.api.nvim_buf_get_lines(state.buf, -2, -1, false)[1] or ""
-                if last_line ~= "" then
+                local buf_is_pristine = last_line == "" and vim.api.nvim_buf_line_count(state.buf) == 1
+                if last_line ~= "" or buf_is_pristine then
                     lines[1] = last_line .. lines[1]
                     vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, lines)
                 else
