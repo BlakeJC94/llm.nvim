@@ -10,6 +10,8 @@ local M = {}
 --- @field progress_timer number|nil Timer handle for progress indicator
 --- @field awaiting_response boolean Whether an LLM request is currently in progress
 --- @field n_dots_progress number Current number of dots to display in progress indicator (0-3)
+--- @field split_size number|nil Last known size of the split window (nil means use CONFIG default)
+--- @field split_direction string|nil Last known direction of the split window (nil means use CONFIG default)
 local state = {
     buf = nil,
     job_id = nil,
@@ -18,6 +20,8 @@ local state = {
     awaiting_response = false,
     n_dots_progress = 0,
     partial = "",
+    split_size = nil,
+    split_direction = nil,
 }
 
 --- Default plugin configuration
@@ -68,14 +72,34 @@ local function eval_opts(opts)
     return opts
 end
 
+--- Get the split size to use when opening the window
+--- Returns the last known size from state if the user has resized, otherwise falls back to the config default
+--- @return number Split size in lines (horizontal) or columns (vertical)
+local function get_split_size()
+    if state.split_size ~= nil then
+        return state.split_size
+    end
+    return eval_opts(CONFIG.split).size
+end
+
+--- Get the split direction to use when opening the window
+--- Returns the last known direction from state if the user has rotated the split, otherwise falls back to the config default
+--- @return string Split direction ("horizontal" or "vertical")
+local function get_split_direction()
+    if state.split_direction ~= nil then
+        return state.split_direction
+    end
+    return eval_opts(CONFIG.split).direction
+end
+
 --- Generate the vim split command string based on configuration
 --- @param config Config Configuration object containing split settings
 --- @return string Vim split command (e.g., "botright 16split")
 local function get_split_cmd(config)
     local opts = eval_opts(config.split)
     local pos = (opts.position == "left" or opts.position == "top") and "topleft" or "botright"
-    local dir = opts.direction == "vertical" and " vertical" or ""
-    return pos .. dir .. " " .. opts.size .. "split"
+    local dir = get_split_direction() == "vertical" and " vertical" or ""
+    return pos .. dir .. " " .. get_split_size() .. "split"
 end
 
 --- Create and configure a new window for the LLM buffer
@@ -89,6 +113,33 @@ local function create_win(config, buf)
     for opt, val in pairs(config.wo) do
         vim.wo[win][opt] = val
     end
+
+    -- persist size and direction whenever this window is resized or rotated
+    vim.api.nvim_create_autocmd("WinResized", {
+        callback = function()
+            if not vim.api.nvim_win_is_valid(win) then
+                return true -- delete the autocmd
+            end
+            -- v:event.windows contains the list of window IDs that were resized
+            local resized = vim.v.event.windows or {}
+            for _, wid in ipairs(resized) do
+                if wid == win then
+                    local win_width  = vim.api.nvim_win_get_width(win)
+                    local win_height = vim.api.nvim_win_get_height(win)
+                    -- infer direction: a window spanning the full editor height is a vertical split
+                    if win_height >= vim.o.lines - vim.o.cmdheight - 1 then
+                        state.split_direction = "vertical"
+                        state.split_size = win_width
+                    else
+                        state.split_direction = "horizontal"
+                        state.split_size = win_height
+                    end
+                    break
+                end
+            end
+        end,
+    })
+
     return win
 end
 
@@ -126,6 +177,8 @@ local function init_buffer()
                 state.buf = nil
                 state.job_id = nil
                 state.win = nil
+                state.split_size = nil
+                state.split_direction = nil
             end,
         })
     end
