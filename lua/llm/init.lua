@@ -214,9 +214,9 @@ local cb_on_exit = function(obj)
         return
     end
 
-    vim.schedule(function()
-        vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, vim.split(obj.stdout, "\n"))
-    end)
+    -- vim.schedule(function()
+    --     vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, vim.split(obj.stdout, "\n"))
+    -- end)
 end
 
 --- Execute an LLM command
@@ -242,7 +242,8 @@ M.llm = function(cmd_opts)
         end)
     end
 
-    local cmd_to_exec = "stdbuf -oL -eL llm" .. " " .. args
+    -- local cmd_to_exec = "stdbuf -oL -eL llm" .. " " .. args
+    local cmd_to_exec = "i=1; while [ $i -le 5 ]; do sleep 1; echo $i; i=$((i+1)); done"
 
     -- Check if we are in visual mode and get the selection range
     local text = nil
@@ -268,7 +269,7 @@ M.llm = function(cmd_opts)
     if bang then
         -- synchronous exec, write output to cursor
         print("In progress...")
-        local obj = vim.system({ "sh", "-c", "exec " .. cmd_to_exec }, job_opts):wait()
+        local obj = vim.system({ "sh", "-c", cmd_to_exec }, job_opts):wait()
 
         if obj.code ~= nil and obj.code > 0 then
             vim.notify("llm failed: " .. obj.stderr, vim.log.levels.ERROR)
@@ -292,7 +293,21 @@ M.llm = function(cmd_opts)
             M.open()
         end
 
-        state.job_id = vim.system({ "sh", "-c", "exec " .. cmd_to_exec }, job_opts, cb_on_exit)
+        job_opts.stdout = function(err, data)
+            if data == nil then
+                return
+            end
+
+            if state.progress_timer ~= nil then
+                vim.schedule(stop_progress_print)
+            end
+
+            vim.schedule(function()
+                vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, vim.split(data, "\n"))
+            end)
+        end
+
+        state.job_id = vim.system({ "sh", "-c", cmd_to_exec }, job_opts, cb_on_exit)
 
         state.awaiting_response = true
         state.progress_timer = vim.fn.timer_start(0, M._cb_progress_print)
