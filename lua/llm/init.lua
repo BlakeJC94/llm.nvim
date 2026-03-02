@@ -27,6 +27,7 @@ local state = {
 --- @field bo table Buffer options to apply to the LLM buffer
 local CONFIG = {
     autoscroll = true,
+    llm_path = "llm",
     split = {
         direction = "horizontal",
         size = 16,
@@ -287,7 +288,8 @@ M.llm = function(cmd_opts)
         end)
     end
 
-    local cmd_to_exec = "llm" .. " " .. args
+    local llm_path = eval_opts(CONFIG.llm_path)
+    local cmd_to_exec = llm_path .. " " .. args
 
     -- Check if we are in visual mode and get the selection range
     local text = nil
