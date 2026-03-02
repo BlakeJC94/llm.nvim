@@ -128,8 +128,6 @@ local function init_buffer()
                 state.win = nil
             end,
         })
-    else
-        vim.api.nvim_buf_set_lines(state.buf, 0, -1, true, { "" })
     end
 end
 
