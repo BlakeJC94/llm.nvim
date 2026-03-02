@@ -26,6 +26,7 @@ local state = {
 --- @field wo table Window options to apply to the LLM window
 --- @field bo table Buffer options to apply to the LLM buffer
 local CONFIG = {
+    autoscroll = true,
     split = {
         direction = "horizontal",
         size = 16,
@@ -252,8 +253,6 @@ M.llm = function(cmd_opts)
     end
 
     local cmd_to_exec = "llm" .. " " .. args
-    -- local cmd_to_exec = "stdbuf -oL -eL llm" .. " " .. args
-    -- local cmd_to_exec = "i=1; while [ $i -le 5 ]; do sleep 1; echo $i; i=$((i+1)); done"
 
     -- Check if we are in visual mode and get the selection range
     local text = nil
@@ -330,9 +329,11 @@ M.llm = function(cmd_opts)
                     vim.api.nvim_buf_set_lines(state.buf, -1, -1, true, lines)
                 end
                 -- scroll to the last line in all windows displaying this buffer
-                local last = vim.api.nvim_buf_line_count(state.buf)
-                for _, win in ipairs(vim.fn.win_findbuf(state.buf)) do
-                    vim.api.nvim_win_set_cursor(win, { last, 0 })
+                if CONFIG.autoscroll then
+                    local last = vim.api.nvim_buf_line_count(state.buf)
+                    for _, win in ipairs(vim.fn.win_findbuf(state.buf)) do
+                        vim.api.nvim_win_set_cursor(win, { last, 0 })
+                    end
                 end
             end)
         end
