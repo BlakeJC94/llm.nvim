@@ -36,6 +36,8 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
     {
         "https://github.com/BlakeJC94/llm.nvim",
         opts = {
+            autoscroll = true,
+            llm_path = "llm",  -- Can be a string or a function
             split = {
                 direction = "horizontal",
                 size = 14,
