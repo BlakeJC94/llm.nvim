@@ -45,7 +45,7 @@ local CONFIG = {
         signcolumn = "no",
         spell = false,
         wrap = true,
-        foldlevel = 1,
+        foldlevel = 99,
     },
     bo = {
         buflisted = false,
