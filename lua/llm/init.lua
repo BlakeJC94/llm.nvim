@@ -235,6 +235,16 @@ local stop_progress_print = function()
     state.progress_timer = nil
 end
 
+local autoscroll_to_bottom = function()
+    if not CONFIG.autoscroll then
+        return
+    end
+    local last = vim.api.nvim_buf_line_count(state.buf)
+    for _, win in ipairs(vim.fn.win_findbuf(state.buf)) do
+        vim.api.nvim_win_set_cursor(win, { last, 0 })
+    end
+end
+
 --- Progress indicator callback
 --- Displays an animated "In progress..." message with cycling dots
 --- Recursively schedules itself every 1 second while awaiting response
@@ -279,9 +289,9 @@ local cb_on_exit = function(obj)
     -- flush any remaining partial data
     vim.schedule(function()
         if state.partial ~= "" then
-            local last_line = vim.api.nvim_buf_get_lines(state.buf, -2, -1, false)[1] or ""
-            vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, { last_line .. state.partial })
+            vim.api.nvim_buf_set_lines(state.buf, -1, -1, true, { state.partial })
             state.partial = ""
+            autoscroll_to_bottom()
         end
     end)
 end
@@ -299,29 +309,16 @@ local cb_on_stdout = function(err, data)
         -- Split incoming data on newlines
         local lines = vim.split(data, "\n", { plain = true })
 
-        -- If there are no newlines in the data, just accumulate in partial
-        if #lines == 1 then
-            state.partial = state.partial .. data
-            return
-        end
-
-        -- We have at least one newline, so we have complete lines to write
         -- The first element completes the partial line from previous chunk
         lines[1] = state.partial .. lines[1]
 
         -- The last element becomes the new partial (empty string if data ended with \n)
-        state.partial = table.remove(lines)
+        state.partial = table.remove(lines) or ""
 
-        -- Append the complete lines to the buffer
-        -- (buffer always contains complete lines only, partial data stays in state.partial)
-        vim.api.nvim_buf_set_lines(state.buf, -1, -1, true, lines)
-
-        -- scroll to the last line in all windows displaying this buffer
-        if CONFIG.autoscroll then
-            local last = vim.api.nvim_buf_line_count(state.buf)
-            for _, win in ipairs(vim.fn.win_findbuf(state.buf)) do
-                vim.api.nvim_win_set_cursor(win, { last, 0 })
-            end
+        -- Append the complete lines to the buffer (if any)
+        if #lines > 0 then
+            vim.api.nvim_buf_set_lines(state.buf, -1, -1, true, lines)
+            autoscroll_to_bottom()
         end
     end)
 end
@@ -338,6 +335,8 @@ end
 M.llm = function(cmd_opts)
     local bang = cmd_opts.bang
     local args = cmd_opts.args
+
+    clear_buffer()
 
     local current_file = vim.api.nvim_buf_get_name(0)
     if current_file ~= "" then
