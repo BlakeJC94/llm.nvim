@@ -155,6 +155,12 @@ local function is_open()
     end
 end
 
+local function clear_buffer()
+    if state.buf ~= nil then
+        vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, { "" })
+    end
+end
+
 --- Initialize or reset the LLM buffer
 --- Creates a new buffer if none exists, or clears the existing buffer
 --- Sets up buffer options and an autocmd to clean up state on buffer deletion
@@ -225,7 +231,7 @@ end
 
 local stop_progress_print = function()
     vim.fn.timer_stop(state.progress_timer)
-    vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, { "" })
+    clear_buffer()
     state.progress_timer = nil
 end
 
@@ -290,22 +296,26 @@ local cb_on_stdout = function(err, data)
     end
 
     vim.schedule(function()
-        local chunk = state.partial .. data
-        local lines = vim.split(chunk, "\n", { plain = true })
-        -- everything except the last element is a complete line
-        state.partial = table.remove(lines) or ""
-        if #lines == 0 then
+        -- Split incoming data on newlines
+        local lines = vim.split(data, "\n", { plain = true })
+
+        -- If there are no newlines in the data, just accumulate in partial
+        if #lines == 1 then
+            state.partial = state.partial .. data
             return
         end
-        -- join first element onto the current last buffer line (mid-line continuation)
-        local last_line = vim.api.nvim_buf_get_lines(state.buf, -2, -1, false)[1] or ""
-        local buf_is_pristine = last_line == "" and vim.api.nvim_buf_line_count(state.buf) == 1
-        if last_line ~= "" or buf_is_pristine then
-            lines[1] = last_line .. lines[1]
-            vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, lines)
-        else
-            vim.api.nvim_buf_set_lines(state.buf, -1, -1, true, lines)
-        end
+
+        -- We have at least one newline, so we have complete lines to write
+        -- The first element completes the partial line from previous chunk
+        lines[1] = state.partial .. lines[1]
+
+        -- The last element becomes the new partial (empty string if data ended with \n)
+        state.partial = table.remove(lines)
+
+        -- Append the complete lines to the buffer
+        -- (buffer always contains complete lines only, partial data stays in state.partial)
+        vim.api.nvim_buf_set_lines(state.buf, -1, -1, true, lines)
+
         -- scroll to the last line in all windows displaying this buffer
         if CONFIG.autoscroll then
             local last = vim.api.nvim_buf_line_count(state.buf)
@@ -355,10 +365,9 @@ M.llm = function(cmd_opts)
     end
 
     init_buffer()
+    clear_buffer()
 
-    local job_opts = {
-        text = true,
-    }
+    local job_opts = {}
     if text then
         job_opts.stdin = text
     end
