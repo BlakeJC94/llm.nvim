@@ -157,7 +157,7 @@ end
 
 local function clear_buffer()
     if state.buf ~= nil then
-        vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, { "" })
+        vim.api.nvim_buf_set_lines(state.buf, 0, -1, true, { "" })
     end
 end
 
