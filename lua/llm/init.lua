@@ -439,7 +439,7 @@ M.setup = function(opts)
         {
             name = "LLM",
             fn = M.llm,
-            opts = { range = true, bang = true, nargs = "+", desc = "Invoke LLM Command" },
+            opts = { range = true, bang = true, nargs = "*", desc = "Invoke LLM Command" },
         },
         {
             name = "LLMStop",
