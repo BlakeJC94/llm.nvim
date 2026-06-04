@@ -126,7 +126,7 @@ local function create_win(config, buf)
             local resized = vim.v.event.windows or {}
             for _, wid in ipairs(resized) do
                 if wid == win then
-                    local win_width  = vim.api.nvim_win_get_width(win)
+                    local win_width = vim.api.nvim_win_get_width(win)
                     local win_height = vim.api.nvim_win_get_height(win)
                     -- infer direction: a window spanning the full editor height is a vertical split
                     if win_height >= vim.o.lines - vim.o.cmdheight - 1 then
@@ -259,7 +259,7 @@ M._cb_progress_print = function()
 
     state.n_dots_progress = state.n_dots_progress % 3 + 1
 
-    local msg = "In progress" .. string.rep(".", state.n_dots_progress)
+    local msg = string.rep(".", state.n_dots_progress)
     vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, { msg })
 
     state.progress_timer = vim.fn.timer_start(1000, M._cb_progress_print)
@@ -349,27 +349,35 @@ local LLM_SUBCOMMANDS = {
     "uninstall",
 }
 
---- Build the shell command string for llm
+--- Build the shell command for the llm CLI
 --- If args start with a known subcommand, pass through as-is
 --- Otherwise, prepend "prompt" and include the -t template flag if configured
 --- @param llm_path string Path to the llm binary
 --- @param template string|nil Default template name
 --- @param args string User-provided arguments
---- @return string Full shell command
-local function build_cmd(template, args)
+--- @return table Argument list for vim.system ({ "sh", "-c", <command> })
+local function build_cmd(llm_path, template, args)
     local first_word = args:match("^%S+")
-    for _, cmd in ipairs(LLM_SUBCOMMANDS) do
-        if first_word == cmd then
-            return args
+    for _, subcmd in ipairs(LLM_SUBCOMMANDS) do
+        if first_word == subcmd then
+            return { "sh", "-c", vim.fn.shellescape(llm_path) .. " " .. args }
         end
     end
-    local prompt_args = args
-    local has_template_flag = args:match("^-t%s+%S+") or args:match("^--template%s+%S+")
-        or args:match("%s-t%s+%S+") or args:match("%s--template%s+%S+")
-    if template and not has_template_flag then
-        prompt_args = "-t " .. template .. " " .. args
+    local stripped = args:gsub("'[^']*'", ""):gsub('"[^"]*"', "")
+    local has_template_flag = false
+    for token in stripped:gmatch("%S+") do
+        if token == "-t" or token == "--template"
+            or token:match("^-t=") or token:match("^--template=") then
+            has_template_flag = true
+            break
+        end
     end
-    return "prompt " .. prompt_args
+    local cmd_str = vim.fn.shellescape(llm_path) .. " prompt"
+    if template and not has_template_flag then
+        cmd_str = cmd_str .. " -t " .. vim.fn.shellescape(template)
+    end
+    cmd_str = cmd_str .. " " .. args
+    return { "sh", "-c", cmd_str }
 end
 
 --- Execute an LLM command
@@ -414,7 +422,7 @@ M.llm = function(cmd_opts)
 
     local llm_path = eval_opts(CONFIG.llm_path)
     local template = eval_opts(CONFIG.template)
-    local cmd_to_exec = build_cmd(template, args)
+    local cmd = build_cmd(llm_path, template, args)
 
     local job_opts = {}
     if text then
@@ -424,7 +432,7 @@ M.llm = function(cmd_opts)
     if bang then
         -- synchronous exec, write output to cursor
         print("In progress...")
-        local obj = vim.system({ "sh", "-c", llm_path .. " " .. cmd_to_exec }, job_opts):wait()
+        local obj = vim.system(cmd, job_opts):wait()
 
         if obj.code ~= nil and obj.code > 0 then
             vim.notify("llm failed: " .. obj.stderr, vim.log.levels.ERROR)
@@ -448,15 +456,20 @@ M.llm = function(cmd_opts)
             M.open()
         end
 
+        local display_cmd = cmd[3]:sub(#vim.fn.shellescape(llm_path) + 2)
+        display_cmd = display_cmd:gsub("^prompt%s+", "")
         local header_lines = {
             "## Prompt",
             "",
-            args,
+            display_cmd,
         }
 
         if cmd_opts.range > 0 and current_file ~= "" then
             table.insert(header_lines, "")
-            table.insert(header_lines, string.format("(lines %d-%d from %s)", cmd_opts.line1, cmd_opts.line2, current_file))
+            table.insert(
+                header_lines,
+                string.format("(lines %d-%d from %s)", cmd_opts.line1, cmd_opts.line2, current_file)
+            )
         end
 
         table.insert(header_lines, "")
@@ -468,7 +481,7 @@ M.llm = function(cmd_opts)
         job_opts.stdout = cb_on_stdout
 
         state.partial = ""
-        state.job_id = vim.system({ "sh", "-c", cmd_to_exec }, job_opts, cb_on_exit)
+        state.job_id = vim.system(cmd, job_opts, cb_on_exit)
 
         state.awaiting_response = true
         state.progress_timer = vim.fn.timer_start(0, M._cb_progress_print)
