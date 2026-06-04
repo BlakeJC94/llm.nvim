@@ -325,6 +325,51 @@ local cb_on_stdout = function(err, data)
     end)
 end
 
+--- Known llm subcommands that are NOT "prompt"
+--- If args start with one of these, pass through without modification
+local LLM_SUBCOMMANDS = {
+    "aliases",
+    "chat",
+    "collections",
+    "embed",
+    "embed-models",
+    "embed-multi",
+    "fragments",
+    "install",
+    "keys",
+    "logs",
+    "models",
+    "openai",
+    "openrouter",
+    "plugins",
+    "schemas",
+    "similar",
+    "templates",
+    "tools",
+    "uninstall",
+}
+
+--- Build the shell command string for llm
+--- If args start with a known subcommand, pass through as-is
+--- Otherwise, prepend "prompt" and include the -t template flag if configured
+--- @param llm_path string Path to the llm binary
+--- @param template string|nil Default template name
+--- @param args string User-provided arguments
+--- @return string Full shell command
+local function build_cmd(llm_path, template, args)
+    local first_word = args:match("^%S+")
+    for _, cmd in ipairs(LLM_SUBCOMMANDS) do
+        if first_word == cmd then
+            return llm_path .. " " .. args
+        end
+    end
+    local prompt_args = args
+    if template then
+        prompt_args = "-t " .. template .. " " .. args
+    end
+    return llm_path .. " prompt " .. prompt_args
+end
+
 --- Execute an LLM command
 --- Supports both synchronous (with bang) and asynchronous execution
 --- Can process visual selections and expand vim filename modifiers (%, %:p, etc.)
@@ -350,10 +395,6 @@ M.llm = function(cmd_opts)
         end)
     end
 
-    local llm_path = eval_opts(CONFIG.llm_path)
-    local template = eval_opts(CONFIG.template)
-    local cmd_to_exec = llm_path .. (template and (" -t " .. template) or "") .. " " .. args
-
     -- Check if we are in visual mode and get the selection range
     local text = nil
     if cmd_opts.range > 0 then
@@ -368,6 +409,10 @@ M.llm = function(cmd_opts)
 
     init_buffer()
     clear_buffer()
+
+    local llm_path = eval_opts(CONFIG.llm_path)
+    local template = eval_opts(CONFIG.template)
+    local cmd_to_exec = build_cmd(llm_path, template, args)
 
     local job_opts = {}
     if text then
@@ -414,7 +459,6 @@ M.llm = function(cmd_opts)
 
         table.insert(header_lines, "")
         table.insert(header_lines, "## Response")
-        table.insert(header_lines, "")
         table.insert(header_lines, "")
 
         vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, header_lines)

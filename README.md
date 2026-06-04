@@ -75,10 +75,16 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 Execute an LLM command asynchronously and display output in the LLM window.
 
+Arguments that don't start with a known `llm` subcommand (like `logs`,
+`templates`, `chat`, etc.) are automatically prefixed with `prompt`, so
+`:LLM "Explain this"` runs `llm prompt "Explain this"`. If a `template` is
+configured, `-t <template>` is also prepended.
+
 ```vim
 :LLM "Explain this code" < %
 :LLM "Write a function to reverse a string"
 :'<,'>LLM "Refactor this code"
+:LLM logs -n 1
 ```
 
 ### `:LLM! {args}`
