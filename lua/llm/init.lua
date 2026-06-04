@@ -393,7 +393,19 @@ M.llm = function(cmd_opts)
     local bang = cmd_opts.bang
     local args = cmd_opts.args
 
-    clear_buffer()
+    local stripped_args = args:gsub("'[^']*'", ""):gsub('"[^"]*"', "")
+    local continuing = false
+    for token in stripped_args:gmatch("%S+") do
+        if token == "-c" or token == "--continue"
+            or token:match("^-c=") or token:match("^--continue=") then
+            continuing = true
+            break
+        end
+    end
+
+    if not continuing then
+        clear_buffer()
+    end
 
     local current_file = vim.api.nvim_buf_get_name(0)
     if current_file ~= "" then
@@ -418,7 +430,9 @@ M.llm = function(cmd_opts)
     end
 
     init_buffer()
-    clear_buffer()
+    if not continuing then
+        clear_buffer()
+    end
 
     local llm_path = eval_opts(CONFIG.llm_path)
     local template = eval_opts(CONFIG.template)
@@ -476,7 +490,23 @@ M.llm = function(cmd_opts)
         table.insert(header_lines, "## Response")
         table.insert(header_lines, "")
 
-        vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, header_lines)
+        if continuing then
+            local line_count = vim.api.nvim_buf_line_count(state.buf)
+            local buf_has_content = line_count > 1
+                or (line_count == 1 and vim.api.nvim_buf_get_lines(state.buf, 0, 1, false)[1] ~= "")
+            if buf_has_content then
+                local last_line = line_count
+                vim.api.nvim_buf_set_lines(state.buf, last_line, -1, false, { "", "" })
+                last_line = last_line + 2
+                vim.api.nvim_buf_set_lines(state.buf, last_line, -1, false, header_lines)
+            else
+                vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, header_lines)
+            end
+        else
+            vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, header_lines)
+        end
+
+        autoscroll_to_bottom()
 
         job_opts.stdout = cb_on_stdout
 
