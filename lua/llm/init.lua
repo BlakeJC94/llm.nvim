@@ -233,7 +233,7 @@ end
 
 local stop_progress_print = function()
     vim.fn.timer_stop(state.progress_timer)
-    clear_buffer()
+    vim.api.nvim_buf_set_lines(state.buf, -2, -1, true, { "" })
     state.progress_timer = nil
 end
 
@@ -400,6 +400,24 @@ M.llm = function(cmd_opts)
         if not is_open() then
             M.open()
         end
+
+        local header_lines = {
+            "## Prompt",
+            "",
+            args,
+        }
+
+        if cmd_opts.range > 0 and current_file ~= "" then
+            table.insert(header_lines, "")
+            table.insert(header_lines, string.format("(lines %d-%d from %s)", cmd_opts.line1, cmd_opts.line2, current_file))
+        end
+
+        table.insert(header_lines, "")
+        table.insert(header_lines, "## Response")
+        table.insert(header_lines, "")
+        table.insert(header_lines, "")
+
+        vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, header_lines)
 
         job_opts.stdout = cb_on_stdout
 
