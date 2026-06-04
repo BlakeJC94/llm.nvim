@@ -38,6 +38,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
         opts = {
             autoscroll = true,
             llm_path = "llm",  -- Can be a string or a function
+            template = nil,     -- Default template name, passed as -t <template>
             split = {
                 direction = "horizontal",
                 size = 14,
@@ -112,6 +113,7 @@ The plugin can be configured during setup:
 
 ```lua
 opts = {
+    template = "default",          -- default template passed as -t <template>
     split = {
         direction = "horizontal",   -- or "vertical"
         size = 16,                  -- window size in lines/columns
@@ -134,6 +136,33 @@ opts = {
     },
 })
 ```
+
+### Templates
+
+The `template` option sets a default template passed to `llm` via the `-t`
+flag on every `:LLM` invocation. When set to `nil` (the default), no `-t` flag
+is added.
+
+Templates are YAML files stored in the directory returned by
+`llm templates path`. For example:
+
+```yaml
+# $(llm templates path)/default.yaml
+
+name: default
+model: openrouter/deepseek/deepseek-v4-flash
+
+system: |
+  Be as short, direct and concise as possible. Do not make any further
+  suggestions --- I'll ask exactly what I need and nothing more. If I need some
+  coding help, just return the required code with minimal explanation. Again --- I
+  will ask you if I need you to explain it further. Lists are preferred, and
+  please no bold text
+```
+
+With `template = "default"` in your config, every `:LLM` call will
+automatically use `-t default`, selecting the model and system prompt defined
+above.
 
 ## Usage Examples
 
