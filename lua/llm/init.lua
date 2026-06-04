@@ -29,9 +29,11 @@ local state = {
 --- @field split table Split window configuration
 --- @field wo table Window options to apply to the LLM window
 --- @field bo table Buffer options to apply to the LLM buffer
+--- @field template string|nil Default template name passed as -t <template>
 local CONFIG = {
     autoscroll = true,
     llm_path = "llm",
+    template = nil,
     split = {
         direction = "horizontal",
         size = 16,
@@ -349,7 +351,8 @@ M.llm = function(cmd_opts)
     end
 
     local llm_path = eval_opts(CONFIG.llm_path)
-    local cmd_to_exec = llm_path .. " " .. args
+    local template = eval_opts(CONFIG.template)
+    local cmd_to_exec = llm_path .. (template and (" -t " .. template) or "") .. " " .. args
 
     -- Check if we are in visual mode and get the selection range
     local text = nil
@@ -424,6 +427,7 @@ end
 ---   - split: table - Split window configuration (direction, size, position)
 ---   - wo: table - Window options for the LLM window
 ---   - bo: table - Buffer options for the LLM buffer
+---   - template: string|nil - Default template name, passed as -t <template>
 ---
 --- Creates the following user commands:
 ---   - :LLM {args} - Execute LLM command asynchronously in output window
