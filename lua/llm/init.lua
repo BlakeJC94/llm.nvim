@@ -356,18 +356,20 @@ local LLM_SUBCOMMANDS = {
 --- @param template string|nil Default template name
 --- @param args string User-provided arguments
 --- @return string Full shell command
-local function build_cmd(llm_path, template, args)
+local function build_cmd(template, args)
     local first_word = args:match("^%S+")
     for _, cmd in ipairs(LLM_SUBCOMMANDS) do
         if first_word == cmd then
-            return llm_path .. " " .. args
+            return args
         end
     end
     local prompt_args = args
-    if template then
+    local has_template_flag = args:match("^-t%s+%S+") or args:match("^--template%s+%S+")
+        or args:match("%s-t%s+%S+") or args:match("%s--template%s+%S+")
+    if template and not has_template_flag then
         prompt_args = "-t " .. template .. " " .. args
     end
-    return llm_path .. " prompt " .. prompt_args
+    return "prompt " .. prompt_args
 end
 
 --- Execute an LLM command
@@ -412,7 +414,7 @@ M.llm = function(cmd_opts)
 
     local llm_path = eval_opts(CONFIG.llm_path)
     local template = eval_opts(CONFIG.template)
-    local cmd_to_exec = build_cmd(llm_path, template, args)
+    local cmd_to_exec = build_cmd(template, args)
 
     local job_opts = {}
     if text then
@@ -422,7 +424,7 @@ M.llm = function(cmd_opts)
     if bang then
         -- synchronous exec, write output to cursor
         print("In progress...")
-        local obj = vim.system({ "sh", "-c", cmd_to_exec }, job_opts):wait()
+        local obj = vim.system({ "sh", "-c", llm_path .. " " .. cmd_to_exec }, job_opts):wait()
 
         if obj.code ~= nil and obj.code > 0 then
             vim.notify("llm failed: " .. obj.stderr, vim.log.levels.ERROR)
