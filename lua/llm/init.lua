@@ -407,6 +407,7 @@ M.llm = function(cmd_opts)
         clear_buffer()
     end
 
+    local source_buf_ft = vim.bo[0].filetype
     local current_file = vim.api.nvim_buf_get_name(0)
     if current_file ~= "" then
         args = args:gsub("()%%%S*", function(pos)
@@ -478,17 +479,33 @@ M.llm = function(cmd_opts)
             display_cmd,
         }
 
+        local fold_start_in_header = nil
+        local fold_end_in_header = nil
+
         if cmd_opts.range > 0 and current_file ~= "" then
             table.insert(header_lines, "")
             table.insert(
                 header_lines,
                 string.format("(lines %d-%d from %s)", cmd_opts.line1, cmd_opts.line2, current_file)
             )
+            if text then
+                table.insert(header_lines, "")
+                fold_start_in_header = #header_lines + 1
+                table.insert(header_lines, "~~~" .. source_buf_ft)
+                local text_lines = vim.split(text, "\n")
+                for _, line in ipairs(text_lines) do
+                    table.insert(header_lines, line)
+                end
+                table.insert(header_lines, "~~~")
+                fold_end_in_header = #header_lines
+            end
         end
 
         table.insert(header_lines, "")
         table.insert(header_lines, "## Response")
         table.insert(header_lines, "")
+
+        local header_start_line = 1
 
         if continuing then
             local line_count = vim.api.nvim_buf_line_count(state.buf)
@@ -498,12 +515,23 @@ M.llm = function(cmd_opts)
                 local last_line = line_count
                 vim.api.nvim_buf_set_lines(state.buf, last_line, -1, false, { "", "" })
                 last_line = last_line + 2
+                header_start_line = last_line + 1
                 vim.api.nvim_buf_set_lines(state.buf, last_line, -1, false, header_lines)
             else
                 vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, header_lines)
             end
         else
             vim.api.nvim_buf_set_lines(state.buf, 0, -1, false, header_lines)
+        end
+
+        if fold_start_in_header and fold_end_in_header then
+            local fold_start = header_start_line + fold_start_in_header - 1
+            local fold_end = header_start_line + fold_end_in_header - 1
+            vim.api.nvim_win_call(state.win, function()
+                vim.wo.foldmethod = "manual"
+                vim.cmd(fold_start .. "," .. fold_end .. "fold")
+                vim.cmd(fold_start .. "foldclose")
+            end)
         end
 
         autoscroll_to_bottom()
