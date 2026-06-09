@@ -437,6 +437,9 @@ M.llm = function(cmd_opts)
 
     local llm_path = eval_opts(CONFIG.llm_path)
     local template = eval_opts(CONFIG.template)
+    if template == nil or template == "" then
+        template = vim.env.LLM_DEFAULT_TEMPLATE
+    end
     local cmd = build_cmd(llm_path, template, args)
 
     local job_opts = {}

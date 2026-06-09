@@ -146,8 +146,9 @@ opts = {
 ### Templates
 
 The `template` option sets a default template passed to `llm` via the `-t`
-flag on every `:LLM` invocation. When set to `nil` (the default), no `-t` flag
-is added.
+flag on every `:LLM` invocation. When `nil` or empty, the plugin will fall
+back to the `LLM_DEFAULT_TEMPLATE` environment variable if set. If neither is
+provided, no `-t` flag is added.
 
 Templates are YAML files stored in the directory returned by
 `llm templates path`. For example:
